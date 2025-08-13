@@ -367,9 +367,8 @@ int main(int argc, char *argv[])
                             dest->ttl = *ttl;
 
                         dest->source_addr = pt_edi_dest.second.get<string>("source", "");
-                        dest->source_port = pt_edi_dest.second.get<unsigned int>("sourceport");
-
-                        dest->dest_port       = pt_edi_dest.second.get<unsigned int>("port", 0);
+                        dest->source_port = pt_edi_dest.second.get<unsigned int>("sourceport", 0);
+                        dest->dest_port   = pt_edi_dest.second.get<unsigned int>("port", 0);
                         if (dest->dest_port == 0) {
                             // Compatiblity: we have removed the transport and addressing in the
                             // PFT layer, which removed the requirement that all outputs must share
