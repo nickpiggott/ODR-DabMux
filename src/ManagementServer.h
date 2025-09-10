@@ -50,7 +50,6 @@
 #   include "config.h"
 #endif
 
-#include "Socket.h"
 #include "zmq.hpp"
 #include <string>
 #include <map>
@@ -65,7 +64,6 @@
 
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
-#include <cmath>
 
 /*** State handing ***/
 /* An input can be in one of the following three states:

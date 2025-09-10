@@ -33,16 +33,13 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <functional>
 #include <exception>
-#include <algorithm>
 #include <chrono>
 #include <optional>
 #include <stdint.h>
 #include "dabOutput/dabOutput.h"
 #include "input/inputs.h"
 #include "RemoteControl.h"
-#include "Eti.h"
 
 // Protection levels and bitrates for UEP.
 const unsigned char ProtectionLevelTable[64] = {
@@ -315,7 +312,10 @@ class dabEnsemble : public RemoteControllable {
         virtual const json::map_t get_all_values() const;
 
         /* Check if the Linkage Sets are valid */
-        bool validate_linkage_sets(void);
+        bool validate_linkage_sets() const;
+        static bool validate_linkage_sets(
+                const vec_sp_service& services,
+                std::vector<std::shared_ptr<LinkageSet> > linkagesets);
 
         /* all fields are public, since this was a struct before */
         uint16_t id = 0;

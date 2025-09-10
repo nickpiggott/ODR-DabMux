@@ -743,7 +743,14 @@ const json::map_t dabEnsemble::get_all_values() const
     return map;
 }
 
-bool dabEnsemble::validate_linkage_sets()
+bool dabEnsemble::validate_linkage_sets() const
+{
+    return validate_linkage_sets(services, linkagesets);
+}
+
+bool dabEnsemble::validate_linkage_sets(
+        const vec_sp_service& services,
+        std::vector<std::shared_ptr<LinkageSet> > linkagesets)
 {
     for (const auto& ls : linkagesets) {
         const std::string keyserviceuid = ls->keyservice;

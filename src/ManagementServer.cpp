@@ -95,11 +95,6 @@ INPUT_COUNTER_RESET_TIME = std::chrono::minutes(30);
 static constexpr int
 INPUT_UNSTABLE_THRESHOLD = 3;
 
-/* For how long the input buffers must be empty before we move an input to the
- * NoData state.  */
-static constexpr auto
-INPUT_NODATA_TIMEOUT  = std::chrono::seconds(30);
-
 /* Keep 30s of min/max buffer fill information so that we can catch meaningful
  * values even if we have a slow poller */
 static constexpr auto
@@ -643,11 +638,7 @@ input_state_t InputStat::determineState()
 
     // STATE CALCULATION
 
-    /* If the buffer has been empty for more than
-     * INPUT_NODATA_TIMEOUT, we go to the NoData state.
-     *
-     * Consider an empty deque to be NoData too.
-     */
+    /* Consider an empty deque to be NoData. */
     if (std::all_of(
                 m_buffer_fill_stats.begin(), m_buffer_fill_stats.end(),
                 [](const fill_stat_t& fs) { return fs.bufsize == 0; }) ) {

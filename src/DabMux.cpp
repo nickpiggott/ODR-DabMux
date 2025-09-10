@@ -29,83 +29,27 @@
 #   include "config.h"
 #endif
 
-#include <stdlib.h>
 #include <memory>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/info_parser.hpp>
 #include <boost/property_tree/json_parser.hpp>
+#include <ctime>
+#include <cstdlib>
 #include <cstdio>
-#include <iostream>
-#include <fstream>
-#include <iomanip>
 #include <cstring>
+#include <cmath>
 #include <string>
-#include <errno.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 #include <signal.h>
 
-// for basename
-#include <libgen.h>
-
-#include <iterator>
 #include <vector>
-#include <list>
 #include <set>
-#include <map>
-#include <functional>
-#include <algorithm>
 
-#ifdef _WIN32
-#   include <time.h>
-#   include <process.h>
-#   include <io.h>
-#   include <conio.h>
-#   include <winsock2.h> // For types...
-typedef u_char uint8_t;
-typedef WORD uint16_t;
-typedef DWORD32 uint32_t;
-
-#   ifndef __MINGW32__
-#       include "xgetopt.h"
-#   endif
-#   define read _read
-#   define snprintf _snprintf 
-#   define sleep(a) Sleep((a) * 1000)
-#else
-#   include <netinet/in.h>
-#   include <unistd.h>
-#   include <sys/time.h>
-#   include <sys/wait.h>
-#   include <sys/socket.h>
-#   include <sys/ioctl.h>
-#   include <sys/times.h>
-#   include <sys/resource.h>
-
-#endif
-
-#include <time.h>
-
-#ifdef _WIN32
-#   pragma warning ( disable : 4103 )
-#   include "Eti.h"
-#   pragma warning ( default : 4103 )
-#else
-#   include "Eti.h"
-#endif
-
-#include "input/Prbs.h"
-#include "input/Zmq.h"
+#include "DabMultiplexer.h"
 
 #include "dabOutput/dabOutput.h"
-#include "crc.h"
-#include "Socket.h"
-#include "PcDebug.h"
-#include "DabMux.h"
 #include "MuxElements.h"
 #include "utils.h"
-#include "ConfigParser.h"
 #include "ManagementServer.h"
 #include "Log.h"
 #include "RemoteControl.h"
@@ -120,14 +64,10 @@ volatile sig_atomic_t running = 1;
  */
 void signalHandler(int signum)
 {
-#ifdef _WIN32
-    fprintf(stderr, "\npid: %i\n", _getpid());
-#else
     fprintf(stderr, "\npid: %i, ppid: %i\n", getpid(), getppid());
-#endif
+
 #define SIG_MSG "Signal received: "
     switch (signum) {
-#ifndef _WIN32
     case SIGHUP:
         fprintf(stderr, SIG_MSG "SIGHUP\n");
         break;
@@ -138,7 +78,6 @@ void signalHandler(int signum)
         fprintf(stderr, SIG_MSG "SIGPIPE\n");
         return;
         break;
-#endif
     case SIGINT:
         fprintf(stderr, SIG_MSG "SIGINT\n");
         break;
@@ -150,9 +89,7 @@ void signalHandler(int signum)
     default:
         fprintf(stderr, SIG_MSG "number %i\n", signum);
     }
-#ifndef _WIN32
     killpg(0, SIGPIPE);
-#endif
     running = 0;
 }
 
@@ -185,12 +122,6 @@ int main(int argc, char *argv[])
         }
     }
 
-#ifdef _WIN32
-    if (SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST) == 0) {
-        etiLog.log(warn, "Can't increase priority: %s\n",
-                strerror(errno));
-    }
-#else
     // Use the lowest real-time priority for this thread, and switch to real-time scheduling
     const int policy = SCHED_RR;
     sched_param sp;
@@ -199,7 +130,6 @@ int main(int argc, char *argv[])
     if (thread_prio_ret != 0) {
         etiLog.level(error) << "Could not set real-time priority for thread:" << thread_prio_ret;
     }
-#endif
 
     int returnCode = 0;
     ptree pt;

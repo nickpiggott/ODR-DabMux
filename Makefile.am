@@ -60,7 +60,6 @@ odr_dabmux_LDADD    =$(ZMQ_LIBS) $(BOOST_LDFLAGS) \
 					 $(PTHREAD_CFLAGS) $(PTHREAD_LIBS) $(BOOST_SYSTEM_LIB)
 
 odr_dabmux_SOURCES  =src/DabMux.cpp \
-					 src/DabMux.h \
 					 src/DabMultiplexer.cpp \
 					 src/DabMultiplexer.h \
 					 src/input/inputs.h \

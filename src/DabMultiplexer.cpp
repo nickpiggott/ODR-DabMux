@@ -31,6 +31,7 @@
 #include "ManagementServer.h"
 #include "crc.h"
 #include "utils.h"
+#include "Eti.h"
 
 using namespace std;
 
