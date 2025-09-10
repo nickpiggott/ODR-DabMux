@@ -41,10 +41,15 @@ void configuration_t::print() const
         if (auto udp_dest = dynamic_pointer_cast<edi::udp_destination_t>(edi_dest)) {
             etiLog.level(info) << " UDP to " << udp_dest->dest_addr << ":" << udp_dest->dest_port;
             if (not udp_dest->source_addr.empty()) {
-                etiLog.level(info) << "  source      " << udp_dest->source_addr;
-                etiLog.level(info) << "  ttl         " << udp_dest->ttl;
+                etiLog.level(info) << "  source address=" << udp_dest->source_addr;
             }
-            etiLog.level(info) << "  source port " << udp_dest->source_port;
+            if (udp_dest->ttl) {
+                etiLog.level(info) << "  ttl=" << (int)(*udp_dest->ttl);
+            }
+            else {
+                etiLog.level(info) << "  ttl=(default)";
+            }
+            etiLog.level(info) << "  source port=" << udp_dest->source_port;
         }
         else if (auto tcp_dest = dynamic_pointer_cast<edi::tcp_server_t>(edi_dest)) {
             etiLog.level(info) << " TCP listening on port " << tcp_dest->listen_port;
@@ -80,7 +85,10 @@ Sender::Sender(const configuration_t& conf) :
 
             if (not udp_dest->source_addr.empty()) {
                 udp_socket.setMulticastSource(udp_dest->source_addr.c_str());
-                udp_socket.setMulticastTTL(udp_dest->ttl);
+            }
+
+            if (udp_dest->ttl) {
+                udp_socket.setMulticastTTL(*udp_dest->ttl);
             }
 
             auto sender = make_shared<udp_sender_t>(
@@ -99,7 +107,7 @@ Sender::Sender(const configuration_t& conf) :
                     make_shared<PFTSpreader>(tcp_dest->pft_settings, sender));
         }
         else if (auto tcp_dest = dynamic_pointer_cast<edi::tcp_client_t>(edi_dest)) {
-            auto sender = make_shared<tcp_send_client_t>(tcp_dest->dest_addr, tcp_dest->dest_port);
+            auto sender = make_shared<tcp_send_client_t>(tcp_dest->dest_addr, tcp_dest->dest_port, m_conf.verbose);
             m_pft_spreaders.emplace_back(
                     make_shared<PFTSpreader>(tcp_dest->pft_settings, sender));
         }
@@ -199,7 +207,13 @@ void Sender::tcp_dispatcher_t::send_packet(const std::vector<uint8_t> &frame)
 
 void Sender::tcp_send_client_t::send_packet(const std::vector<uint8_t> &frame)
 {
-    sock.sendall(frame);
+    const auto error_stats = sock.sendall(frame);
+
+    if (verbose and error_stats.has_seen_new_errors) {
+        etiLog.level(warn) << "TCP output " << dest_addr << ":" << dest_port
+                          << " has " << error_stats.num_reconnects
+                          << " reconnects: most recent error: " << error_stats.last_error;
+    }
 }
 
 Sender::udp_sender_t::udp_sender_t(std::string dest_addr,
@@ -221,7 +235,11 @@ Sender::tcp_dispatcher_t::tcp_dispatcher_t(uint16_t listen_port,
 }
 
 Sender::tcp_send_client_t::tcp_send_client_t(const std::string &dest_addr,
-                                             uint16_t dest_port) :
+                                             uint16_t dest_port,
+                                             bool verbose) :
+    dest_addr(dest_addr),
+    dest_port(dest_port),
+    verbose(verbose),
     sock(dest_addr, dest_port)
 {
 }
