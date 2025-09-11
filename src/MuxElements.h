@@ -84,7 +84,7 @@ class MuxInitException : public std::exception
         MuxInitException(const std::string m = "ODR-DabMux initialisation error")
             throw()
             : msg(m) {}
-        ~MuxInitException(void) throw() {}
+        ~MuxInitException() throw() {}
         const char* what() const throw() { return msg.c_str(); }
     private:
         std::string msg;
@@ -137,12 +137,12 @@ class AnnouncementCluster : public RemoteControllable {
         uint16_t flags = 0;
         std::string subchanneluid;
 
-        std::string tostring(void) const;
+        std::string tostring() const;
 
         /* Check if the activation/deactivation timeout occurred,
          * and return of if the Announcement is active
          */
-        bool is_active(void);
+        bool is_active();
 
     private:
         mutable std::mutex m_active_mutex;
@@ -372,7 +372,7 @@ struct dabProtectionEEP {
     // select EEP profile A and B.
     // Other values are for future use, see
     // EN 300 401 Clause 6.2.1 "Basic sub-channel organisation"
-    uint8_t GetOption(void) const {
+    uint8_t GetOption() const {
         return (this->profile == EEP_A) ? 0 : 1;
     }
 };
@@ -402,16 +402,16 @@ public:
             protection() { }
 
     // Calculate subchannel size in number of CU
-    unsigned short getSizeCu(void) const;
+    unsigned short getSizeCu() const;
 
     // Calculate subchannel size in number of bytes
-    unsigned short getSizeByte(void) const;
+    unsigned short getSizeByte() const;
 
     // Calculate subchannel size in number of uint32_t
-    unsigned short getSizeWord(void) const;
+    unsigned short getSizeWord() const;
 
     // Calculate subchannel size in number of uint64_t
-    unsigned short getSizeDWord(void) const;
+    unsigned short getSizeDWord() const;
 
     // Read from the input, using the correct buffer management
     size_t readFrame(uint8_t *buffer, size_t size, std::time_t seconds, int utco, uint32_t tsta);
@@ -574,7 +574,7 @@ class LinkageSet {
                 bool hard,
                 bool international);
 
-        std::string get_name(void) const { return m_name; }
+        std::string get_name() const { return m_name; }
 
         std::list<ServiceLink> id_list;
 

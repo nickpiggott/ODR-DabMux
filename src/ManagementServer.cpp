@@ -473,7 +473,7 @@ void InputStat::notifyPeakLevels(int peak_left, int peak_right)
     }
 }
 
-void InputStat::notifyUnderrun(void)
+void InputStat::notifyUnderrun()
 {
     unique_lock<mutex> lock(m_mutex);
 
@@ -492,7 +492,7 @@ void InputStat::notifyUnderrun(void)
     }
 }
 
-void InputStat::notifyOverrun(void)
+void InputStat::notifyOverrun()
 {
     unique_lock<mutex> lock(m_mutex);
 

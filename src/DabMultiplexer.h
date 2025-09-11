@@ -45,47 +45,59 @@ constexpr uint32_t ETI_FSYNC1 = 0x49C5F8;
 
 class MuxTime {
     private:
-    std::time_t m_edi_time = 0;
-    uint32_t m_pps_offset_ms = 0;
-    int64_t m_tist_offset_ms = 0;
+        std::time_t m_edi_time = 0;
+        uint32_t m_pps_offset_ms = 0;
+        int64_t m_tist_offset_ms = 0;
 
     public:
-    std::pair<uint32_t, std::time_t> get_tist_seconds();
-    std::pair<uint32_t, std::time_t> get_milliseconds_seconds();
+        std::pair<uint32_t, std::time_t> get_tist_seconds();
+        std::pair<uint32_t, std::time_t> get_milliseconds_seconds();
 
 
-    /* Pre v3 odr-dabmux did the MNSC calculation differently,
-     * which works with the easydabv2. The rework in odr-dabmux,
-     * deriving MNSC time from EDI time broke this.
-     *
-     * That's why we're now tracking MNSC time in separate variables,
-     * to get the same behaviour back.
-     *
-     * I'm not aware of any devices using MNSC time besides the
-     * easydab. ODR-DabMod now considers EDI seconds or ZMQ metadata.
-     */
-    bool mnsc_increment_time = false;
-    std::time_t mnsc_time = 0;
+        /* Pre v3 odr-dabmux did the MNSC calculation differently,
+         * which works with the easydabv2. The rework in odr-dabmux,
+         * deriving MNSC time from EDI time broke this.
+         *
+         * That's why we're now tracking MNSC time in separate variables,
+         * to get the same behaviour back.
+         *
+         * I'm not aware of any devices using MNSC time besides the
+         * easydab. ODR-DabMod now considers EDI seconds or ZMQ metadata.
+         */
+        bool mnsc_increment_time = false;
+        std::time_t mnsc_time = 0;
 
-    /* Setup the time and return the initial currentFrame counter value */
-    uint64_t init(uint32_t tist_at_fct0_ms, double tist_offset);
-    void increment_timestamp();
-    double tist_offset() const { return m_tist_offset_ms / 1000.0; }
-    void set_tist_offset(double new_tist_offset);
+        /* Setup the time and return the initial currentFrame counter value */
+        uint64_t init(uint32_t tist_at_fct0_ms, double tist_offset);
+        void increment_timestamp();
+        double tist_offset() const { return m_tist_offset_ms / 1000.0; }
+        void set_tist_offset(double new_tist_offset);
+};
+
+class DabMultiplexerConfig {
+    public:
+        boost::property_tree::ptree pt;
+
+        void read(const std::string& filename);
+        bool valid() const { return m_config_file != ""; }
+        std::string config_file() const { return m_config_file; }
+
+    private:
+        std::string m_config_file;
 };
 
 class DabMultiplexer : public RemoteControllable {
     public:
-        DabMultiplexer(boost::property_tree::ptree pt);
+        DabMultiplexer(DabMultiplexerConfig& config);
         DabMultiplexer(const DabMultiplexer& other) = delete;
         DabMultiplexer& operator=(const DabMultiplexer& other) = delete;
-        ~DabMultiplexer();
+        virtual ~DabMultiplexer();
 
         void prepare(bool require_tai_clock);
 
         void mux_frame(std::vector<std::shared_ptr<DabOutput> >& outputs);
 
-        void print_info(void);
+        void print_info();
 
         void set_edi_config(const edi::configuration_t& new_edi_conf);
 
@@ -99,11 +111,13 @@ class DabMultiplexer : public RemoteControllable {
         virtual const json::map_t get_all_values() const;
 
     private:
-        void prepare_subchannels(void);
-        void prepare_services_components(void);
-        void prepare_data_inputs(void);
+        void prepare_subchannels();
+        void prepare_services_components();
+        void prepare_data_inputs();
 
-        boost::property_tree::ptree m_pt;
+        void reload_linkagesets();
+
+        DabMultiplexerConfig& m_config;
 
         MuxTime m_time;
         uint64_t currentFrame = 0;

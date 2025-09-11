@@ -31,8 +31,6 @@
 
 #include <memory>
 #include <boost/property_tree/ptree.hpp>
-#include <boost/property_tree/info_parser.hpp>
-#include <boost/property_tree/json_parser.hpp>
 #include <ctime>
 #include <cstdlib>
 #include <cstdio>
@@ -132,11 +130,12 @@ int main(int argc, char *argv[])
     }
 
     int returnCode = 0;
-    ptree pt;
     std::vector<std::shared_ptr<DabOutput> > outputs;
 
     try {
         string conf_file = "";
+
+        DabMultiplexerConfig mux_conf;
 
         if (argc == 2) { // Assume the only argument is a config file
             conf_file = argv[1];
@@ -154,8 +153,7 @@ int main(int argc, char *argv[])
                 }
 
                 conf_file = argv[2];
-
-                read_info(conf_file, pt);
+                mux_conf.read(conf_file);
             }
             catch (runtime_error &e) {
                 throw MuxInitException(e.what());
@@ -168,23 +166,18 @@ int main(int argc, char *argv[])
         }
 
         try {
-            if (stringEndsWith(conf_file, ".json")) {
-                read_json(conf_file, pt);
-            }
-            else {
-                read_info(conf_file, pt);
-            }
+            mux_conf.read(conf_file);
         }
         catch (runtime_error &e) {
             throw MuxInitException(e.what());
         }
 
         /* Enable Logging to syslog conditionally */
-        if (pt.get<bool>("general.syslog", false)) {
+        if (mux_conf.pt.get<bool>("general.syslog", false)) {
             etiLog.register_backend(std::make_shared<LogToSyslog>());
         }
 
-        const auto startupcheck = pt.get<string>("general.startupcheck", "");
+        const auto startupcheck = mux_conf.pt.get<string>("general.startupcheck", "");
         if (not startupcheck.empty()) {
             etiLog.level(info) << "Running startup check '" << startupcheck << "'";
             int wstatus = system(startupcheck.c_str());
@@ -204,26 +197,26 @@ int main(int argc, char *argv[])
             }
         }
 
-        int mgmtserverport = pt.get<int>("general.managementport",
-                             pt.get<int>("general.statsserverport", 0) );
+        int mgmtserverport = mux_conf.pt.get<int>("general.managementport",
+                             mux_conf.pt.get<int>("general.statsserverport", 0) );
 
         /* Management: stats and config server */
         get_mgmt_server().open(mgmtserverport);
 
         /************** READ REMOTE CONTROL PARAMETERS *************/
-        int telnetport = pt.get<int>("remotecontrol.telnetport", 0);
+        int telnetport = mux_conf.pt.get<int>("remotecontrol.telnetport", 0);
         if (telnetport != 0) {
             auto rc = std::make_shared<RemoteControllerTelnet>(telnetport);
             rcs.add_controller(rc);
         }
 
-        auto zmqendpoint = pt.get<string>("remotecontrol.zmqendpoint", "");
+        auto zmqendpoint = mux_conf.pt.get<string>("remotecontrol.zmqendpoint", "");
         if (not zmqendpoint.empty()) {
             auto rc = std::make_shared<RemoteControllerZmq>(zmqendpoint);
             rcs.add_controller(rc);
         }
 
-        DabMultiplexer mux(pt);
+        DabMultiplexer mux(mux_conf);
 
         etiLog.level(info) <<
                 PACKAGE_NAME << " " <<
@@ -240,7 +233,7 @@ int main(int argc, char *argv[])
         /******************** READ OUTPUT PARAMETERS ***************/
         set<string> all_output_names;
         bool output_require_tai_clock = false;
-        ptree pt_outputs = pt.get_child("outputs");
+        ptree pt_outputs = mux_conf.pt.get_child("outputs");
         for (auto ptree_pair : pt_outputs) {
             string outputuid = ptree_pair.first;
 
@@ -444,7 +437,6 @@ int main(int argc, char *argv[])
                 }
 
                 outputs.push_back(output);
-
             }
         }
 
@@ -464,7 +456,7 @@ int main(int argc, char *argv[])
             edi_conf.print();
         }
 
-        size_t limit = pt.get("general.nbframes", 0);
+        const size_t limit = mux_conf.pt.get("general.nbframes", 0);
 
         etiLog.level(info) << "Start loop";
         /*   Each iteration of the main loop creates one ETI frame */
@@ -473,6 +465,7 @@ int main(int argc, char *argv[])
             mux.mux_frame(outputs);
 
             if (limit && currentFrame >= limit) {
+                etiLog.level(info) << "Max number of ETI frames reached: " << currentFrame;
                 break;
             }
 
@@ -491,17 +484,12 @@ int main(int argc, char *argv[])
                     mgmt_server.restart();
                 }
 
-                mgmt_server.update_ptree(pt);
+                mgmt_server.update_ptree(mux_conf.pt);
             }
-        }
-
-        if (limit) {
-            etiLog.level(info) << "Max number of ETI frames reached: " << currentFrame;
         }
     }
     catch (const MuxInitException& except) {
-        etiLog.level(error) << "Multiplex initialisation aborted: " <<
-            except.what();
+        etiLog.level(error) << "Multiplex initialisation aborted: " << except.what();
         returnCode = 1;
     }
     catch (const std::invalid_argument& except) {

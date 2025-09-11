@@ -93,20 +93,20 @@ class InputStat
         InputStat(const InputStat& other) = delete;
         InputStat& operator=(const InputStat& other) = delete;
         ~InputStat();
-        void registerAtServer(void);
+        void registerAtServer();
 
-        std::string get_name(void) const { return m_name; }
+        std::string get_name() const { return m_name; }
 
         /* This function is called for every frame read by
          * the multiplexer */
         void notifyBuffer(long bufsize);
         void notifyTimestampOffset(double offset);
         void notifyPeakLevels(int peak_left, int peak_right);
-        void notifyUnderrun(void);
-        void notifyOverrun(void);
+        void notifyUnderrun();
+        void notifyOverrun();
         void notifyVersion(const std::string& version, uint32_t uptime_s);
-        std::string encodeValuesJSON(void);
-        input_state_t determineState(void);
+        std::string encodeValuesJSON();
+        input_state_t determineState();
 
     private:
         std::string m_name;
@@ -183,7 +183,7 @@ class ManagementServer
         void update_ptree(const boost::property_tree::ptree& pt);
 
         bool fault_detected() const { return m_fault; }
-        void restart(void);
+        void restart();
 
     private:
         void restart_thread(long);
@@ -192,7 +192,7 @@ class ManagementServer
         zmq::context_t m_zmq_context;
         zmq::socket_t  m_zmq_sock;
 
-        void serverThread(void);
+        void serverThread();
         void handle_message(zmq::message_t& zmq_message);
 
         bool isInputRegistered(std::string& id);

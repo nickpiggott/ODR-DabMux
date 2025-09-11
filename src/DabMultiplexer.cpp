@@ -26,6 +26,9 @@
 #include <cmath>
 #include <set>
 #include <memory>
+#include <boost/property_tree/info_parser.hpp>
+#include <boost/property_tree/json_parser.hpp>
+
 #include "DabMultiplexer.h"
 #include "ConfigParser.h"
 #include "ManagementServer.h"
@@ -132,15 +135,35 @@ std::pair<uint32_t, std::time_t> MuxTime::get_milliseconds_seconds()
 }
 
 
-DabMultiplexer::DabMultiplexer(boost::property_tree::ptree pt) :
+void DabMultiplexerConfig::read(const std::string& filename)
+{
+    m_config_file = "";
+    try {
+        if (stringEndsWith(filename, ".json")) {
+            read_json(filename, pt);
+        }
+        else {
+            read_info(filename, pt);
+        }
+        m_config_file = filename;
+    }
+    catch (const boost::property_tree::file_parser_error& e)
+    {
+        etiLog.level(warn) << "Failed to read " << filename;
+    }
+}
+
+DabMultiplexer::DabMultiplexer(DabMultiplexerConfig& config) :
     RemoteControllable("mux"),
-    m_pt(pt),
+    m_config(config),
     m_time(),
     ensemble(std::make_shared<dabEnsemble>()),
-    m_clock_tai(split_pipe_separated_string(pt.get("general.tai_clock_bulletins", ""))),
+    m_clock_tai(split_pipe_separated_string(m_config.pt.get("general.tai_clock_bulletins", ""))),
     fig_carousel(ensemble, [&]() { return m_time.get_milliseconds_seconds(); })
 {
     RC_ADD_PARAMETER(frames, "Show number of frames generated [read-only]");
+    RC_ADD_PARAMETER(tist_offset, "Configured tist-offset");
+    RC_ADD_PARAMETER(reload_linkagesets, "Write 1 to this parameter to trigger a reload of the linkage sets from the config [write-only]");
 
     rcs.enrol(&m_clock_tai);
 }
@@ -160,7 +183,7 @@ void DabMultiplexer::set_edi_config(const edi::configuration_t& new_edi_conf)
 // Run a set of checks on the configuration
 void DabMultiplexer::prepare(bool require_tai_clock)
 {
-    parse_ptree(m_pt, ensemble);
+    parse_ptree(m_config.pt, ensemble);
 
     rcs.enrol(this);
     rcs.enrol(ensemble.get());
@@ -186,11 +209,11 @@ void DabMultiplexer::prepare(bool require_tai_clock)
         throw MuxInitException();
     }
 
-    const uint32_t tist_at_fct0_ms = m_pt.get<double>("general.tist_at_fct0", 0);
-    currentFrame = m_time.init(tist_at_fct0_ms, m_pt.get<double>("general.tist_offset", 0.0));
+    const uint32_t tist_at_fct0_ms = m_config.pt.get<double>("general.tist_at_fct0", 0);
+    currentFrame = m_time.init(tist_at_fct0_ms, m_config.pt.get<double>("general.tist_offset", 0.0));
     m_time.mnsc_increment_time = false;
 
-    bool tist_enabled = m_pt.get("general.tist", false);
+    bool tist_enabled = m_config.pt.get("general.tist", false);
 
     auto tist_edi_time = m_time.get_tist_seconds();
     const auto timestamp = tist_edi_time.first;
@@ -439,6 +462,32 @@ void DabMultiplexer::prepare_data_inputs()
     }
 }
 
+void DabMultiplexer::reload_linkagesets()
+{
+    try {
+        DabMultiplexerConfig new_conf;
+        new_conf.read(m_config.config_file());
+        if (new_conf.valid()) {
+            const auto pt_linking = new_conf.pt.get_child_optional("linking");
+            std::vector<std::shared_ptr<LinkageSet> > linkagesets;
+            parse_linkage(pt_linking, linkagesets);
+
+            etiLog.level(info) << "Validating " << linkagesets.size() << " new linkage sets.";
+
+            if (ensemble->validate_linkage_sets(ensemble->services, linkagesets)) {
+                ensemble->linkagesets = linkagesets;
+                etiLog.level(info) << "Loaded new linkage sets.";
+            }
+            else {
+                etiLog.level(warn) << "New linkage set validation failed";
+            }
+        }
+    }
+    catch (const std::exception& e)
+    {
+        etiLog.level(warn) << "Failed to update linkage sets: " << e.what();
+    }
+}
 
 /*  Each call creates one ETI frame */
 void DabMultiplexer::mux_frame(std::vector<std::shared_ptr<DabOutput> >& outputs)
@@ -458,7 +507,7 @@ void DabMultiplexer::mux_frame(std::vector<std::shared_ptr<DabOutput> >& outputs
     // The above Tag Items will be assembled into a TAG Packet
     edi::TagPacket edi_tagpacket(edi_conf.tagpacket_alignment);
 
-    const bool tist_enabled = m_pt.get("general.tist", false);
+    const bool tist_enabled = m_config.pt.get("general.tist", false);
 
     int tai_utc_offset = 0;
     if (tist_enabled and m_tai_clock_required) {
@@ -718,7 +767,7 @@ void DabMultiplexer::mux_frame(std::vector<std::shared_ptr<DabOutput> >& outputs
     index = (FLtmp + 2 + 1) * 4;
     eti_TIST *tist = (eti_TIST *) & etiFrame[index];
 
-    bool enableTist = m_pt.get("general.tist", false);
+    bool enableTist = m_config.pt.get("general.tist", false);
     if (enableTist) {
         tist->TIST = htonl(timestamp) | 0xff;
         edi_tagDETI.tsta = timestamp & 0xffffff;
@@ -848,6 +897,9 @@ void DabMultiplexer::set_parameter(const std::string& parameter,
     else if (parameter == "tist_offset") {
         m_time.set_tist_offset(std::stod(value));
     }
+    else if (parameter == "reload_linkagesets") {
+        reload_linkagesets();
+    }
     else {
         stringstream ss;
         ss << "Parameter '" << parameter <<
@@ -865,6 +917,11 @@ const std::string DabMultiplexer::get_parameter(const std::string& parameter) co
     }
     else if (parameter == "tist_offset") {
         ss << m_time.tist_offset();
+    }
+    else if (parameter == "reload_linkagesets") {
+        ss << "Parameter '" << parameter <<
+            "' is not write-only in controllable " << get_rc_name();
+        throw ParameterError(ss.str());
     }
     else {
         ss << "Parameter '" << parameter <<
