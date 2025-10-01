@@ -1,6 +1,12 @@
 This file contains information about the changes done to
 ODR-DabMux in this repository
 
+2025-10-01: Matthias P. Braendli <matthias@mpb.li>
+	(v5.4.1):
+		Fix race condition in TCP output stats that can lock up
+		odr-dabmux on some systems.
+		Add linkage-set hot-reload.
+
 2025-09-10: Matthias P. Braendli <matthias@mpb.li>
 	(v5.4.0):
 		Add support for UDP EDI input to specify local interface IP.
