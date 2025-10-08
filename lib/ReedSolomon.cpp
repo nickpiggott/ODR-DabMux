@@ -31,6 +31,7 @@
 #include <sstream>
 #include <cstdio>
 #include <cstring>         // For memcpy
+#include <cstdint>
 
 extern "C" {
 #include "fec/fec.h"
